@@ -54,11 +54,11 @@ workflows:
           filters:
             branches:
               only: master
-      - deploy:
-          requires:
-            - test
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^v.*/
+#      - deploy:
+#          requires:
+#            - test
+#          filters:
+#            branches:
+#              ignore: /.*/
+#            tags:
+#              only: /^v.*/
