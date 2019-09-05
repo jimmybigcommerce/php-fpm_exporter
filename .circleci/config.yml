@@ -16,12 +16,12 @@ jobs:
           name: Install gometalinter
           command: curl -L https://git.io/vp6lP | sudo BINDIR=/go/bin sh
       - run: make deps lint test-coverage
-      - run:
-          name: Upload Code coverage
-          command: |
-            sed -i 's#github.com/jimmybigcommerce/php-fpm_exporter/##' .cover/cover.out
-            ./cc-test-reporter format-coverage -t gocov .cover/cover.out
-            ./cc-test-reporter upload-coverage
+#      - run:
+#          name: Upload Code coverage
+#          command: |
+#            sed -i 's#github.com/jimmybigcommerce/php-fpm_exporter/##' .cover/cover.out
+#            ./cc-test-reporter format-coverage -t gocov .cover/cover.out
+#            ./cc-test-reporter upload-coverage
 
   semantic-release:
     docker:
