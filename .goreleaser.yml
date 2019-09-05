@@ -11,10 +11,10 @@ builds:
 
 dockers:
   - image_templates:
-      - "hipages/php-fpm_exporter:latest"
-      - "hipages/php-fpm_exporter:{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
-      - "hipages/php-fpm_exporter:{{ .Major }}.{{ .Minor }}"
-      - "hipages/php-fpm_exporter:{{ .Major }}"
+      - "jimmybigcommerce/php-fpm_exporter:latest"
+      - "jimmybigcommerce/php-fpm_exporter:{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
+      - "jimmybigcommerce/php-fpm_exporter:{{ .Major }}.{{ .Minor }}"
+      - "jimmybigcommerce/php-fpm_exporter:{{ .Major }}"
     build_flag_templates:
       - "--build-arg=VERSION={{.Version}}"
       - "--build-arg=BUILD_DATE={{.Date}}"
