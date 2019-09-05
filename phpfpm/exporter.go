@@ -30,7 +30,8 @@ type Exporter struct {
 	mutex       sync.Mutex
 	PoolManager PoolManager
 
-	CountProcessState bool
+	CountProcessState          bool
+	IncludeProcessLevelMetrics bool
 
 	up                       *prometheus.Desc
 	scrapeFailues            *prometheus.Desc
@@ -57,7 +58,8 @@ func NewExporter(pm PoolManager) *Exporter {
 	return &Exporter{
 		PoolManager: pm,
 
-		CountProcessState: false,
+		CountProcessState:          false,
+		IncludeProcessLevelMetrics: true,
 
 		up: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "up"),
@@ -209,13 +211,15 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(e.maxChildrenReached, prometheus.CounterValue, float64(pool.MaxChildrenReached), pool.Name)
 		ch <- prometheus.MustNewConstMetric(e.slowRequests, prometheus.CounterValue, float64(pool.SlowRequests), pool.Name)
 
-		for _, process := range pool.Processes {
-			pidHash := calculateProcessHash(process)
-			ch <- prometheus.MustNewConstMetric(e.processState, prometheus.GaugeValue, 1, pool.Name, pidHash, process.State)
-			ch <- prometheus.MustNewConstMetric(e.processRequests, prometheus.CounterValue, float64(process.Requests), pool.Name, pidHash)
-			ch <- prometheus.MustNewConstMetric(e.processLastRequestMemory, prometheus.GaugeValue, float64(process.LastRequestMemory), pool.Name, pidHash)
-			ch <- prometheus.MustNewConstMetric(e.processLastRequestCPU, prometheus.GaugeValue, process.LastRequestCPU, pool.Name, pidHash)
-			ch <- prometheus.MustNewConstMetric(e.processRequestDuration, prometheus.GaugeValue, float64(process.RequestDuration), pool.Name, pidHash)
+		if e.IncludeProcessLevelMetrics {
+			for _, process := range pool.Processes {
+				pidHash := calculateProcessHash(process)
+				ch <- prometheus.MustNewConstMetric(e.processState, prometheus.GaugeValue, 1, pool.Name, pidHash, process.State)
+				ch <- prometheus.MustNewConstMetric(e.processRequests, prometheus.CounterValue, float64(process.Requests), pool.Name, pidHash)
+				ch <- prometheus.MustNewConstMetric(e.processLastRequestMemory, prometheus.GaugeValue, float64(process.LastRequestMemory), pool.Name, pidHash)
+				ch <- prometheus.MustNewConstMetric(e.processLastRequestCPU, prometheus.GaugeValue, process.LastRequestCPU, pool.Name, pidHash)
+				ch <- prometheus.MustNewConstMetric(e.processRequestDuration, prometheus.GaugeValue, float64(process.RequestDuration), pool.Name, pidHash)
+			}
 		}
 	}
 }
