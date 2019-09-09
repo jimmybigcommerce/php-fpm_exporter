@@ -30,27 +30,33 @@ type Exporter struct {
 	mutex       sync.Mutex
 	PoolManager PoolManager
 
-	CountProcessState          bool
-	IncludeProcessLevelMetrics bool
+	CountProcessState            bool
+	AggregateProcessLevelMetrics bool
 
-	up                       *prometheus.Desc
-	scrapeFailues            *prometheus.Desc
-	startSince               *prometheus.Desc
-	acceptedConnections      *prometheus.Desc
-	listenQueue              *prometheus.Desc
-	maxListenQueue           *prometheus.Desc
-	listenQueueLength        *prometheus.Desc
-	idleProcesses            *prometheus.Desc
-	activeProcesses          *prometheus.Desc
-	totalProcesses           *prometheus.Desc
-	maxActiveProcesses       *prometheus.Desc
-	maxChildrenReached       *prometheus.Desc
-	slowRequests             *prometheus.Desc
-	processRequests          *prometheus.Desc
-	processLastRequestMemory *prometheus.Desc
-	processLastRequestCPU    *prometheus.Desc
-	processRequestDuration   *prometheus.Desc
-	processState             *prometheus.Desc
+	up                                *prometheus.Desc
+	scrapeFailues                     *prometheus.Desc
+	startSince                        *prometheus.Desc
+	acceptedConnections               *prometheus.Desc
+	listenQueue                       *prometheus.Desc
+	maxListenQueue                    *prometheus.Desc
+	listenQueueLength                 *prometheus.Desc
+	idleProcesses                     *prometheus.Desc
+	activeProcesses                   *prometheus.Desc
+	totalProcesses                    *prometheus.Desc
+	maxActiveProcesses                *prometheus.Desc
+	maxChildrenReached                *prometheus.Desc
+	slowRequests                      *prometheus.Desc
+	processRequests                   *prometheus.Desc
+	processLastRequestMemory          *prometheus.Desc
+	processLastRequestCPU             *prometheus.Desc
+	processRequestDuration            *prometheus.Desc
+	processState                      *prometheus.Desc
+	processTotalRequests              *prometheus.Desc
+	processAggregateRequests          *prometheus.Desc
+	processAggregateLastRequestMemory *prometheus.Desc
+	processAggregateLastRequestCPU    *prometheus.Desc
+	processAggregateRequestDuration   *prometheus.Desc
+	processAggregateState             *prometheus.Desc
 }
 
 // NewExporter creates a new Exporter for a PoolManager and configures the necessary metrics.
@@ -58,8 +64,8 @@ func NewExporter(pm PoolManager) *Exporter {
 	return &Exporter{
 		PoolManager: pm,
 
-		CountProcessState:          false,
-		IncludeProcessLevelMetrics: true,
+		CountProcessState:            false,
+		AggregateProcessLevelMetrics: false,
 
 		up: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "up"),
@@ -168,6 +174,42 @@ func NewExporter(pm PoolManager) *Exporter {
 			"The state of the process (Idle, Running, ...).",
 			[]string{"pool", "pid_hash", "state"},
 			nil),
+
+		processTotalRequests: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "process_requests_total"),
+			"The number of requests the process has served.",
+			[]string{"pool"},
+			nil),
+
+		processAggregateRequests: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "process_requests_average"),
+			"The avg number of requests per process.",
+			[]string{"pool"},
+			nil),
+
+		processAggregateLastRequestMemory: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "process_request_memory_average"),
+			"The avg amount of memory the last request consumed.",
+			[]string{"pool"},
+			nil),
+
+		processAggregateLastRequestCPU: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "process_request_cpu_average"),
+			"The avg %cpu of last requests.",
+			[]string{"pool"},
+			nil),
+
+		processAggregateRequestDuration: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "process_request_duration_average"),
+			"The avg duration in microseconds of the requests.",
+			[]string{"pool"},
+			nil),
+
+		processAggregateState: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "process_state_totals"),
+			"The total count for each request state in the pool (Idle, Running, ...).",
+			[]string{"pool", "state"},
+			nil),
 	}
 }
 
@@ -211,7 +253,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(e.maxChildrenReached, prometheus.CounterValue, float64(pool.MaxChildrenReached), pool.Name)
 		ch <- prometheus.MustNewConstMetric(e.slowRequests, prometheus.CounterValue, float64(pool.SlowRequests), pool.Name)
 
-		if e.IncludeProcessLevelMetrics {
+		if !e.AggregateProcessLevelMetrics {
 			for _, process := range pool.Processes {
 				pidHash := calculateProcessHash(process)
 				ch <- prometheus.MustNewConstMetric(e.processState, prometheus.GaugeValue, 1, pool.Name, pidHash, process.State)
@@ -220,8 +262,67 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				ch <- prometheus.MustNewConstMetric(e.processLastRequestCPU, prometheus.GaugeValue, process.LastRequestCPU, pool.Name, pidHash)
 				ch <- prometheus.MustNewConstMetric(e.processRequestDuration, prometheus.GaugeValue, float64(process.RequestDuration), pool.Name, pidHash)
 			}
+		} else {
+			aggregateProcessState(pool, ch, e)
+			processAggregateLastRequestCPU(pool, ch, e)
+			processAggregateLastRequestMemory(pool, ch, e)
+			processAggregateRequestDuration(pool, ch, e)
+			processAggregateRequests(pool, ch, e)
 		}
 	}
+}
+
+func aggregateProcessState(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
+	var m = make(map[string]int)
+	for _, process := range pool.Processes {
+		m[process.State]++
+	}
+	for k, v := range m {
+		ch <- prometheus.MustNewConstMetric(e.processAggregateState, prometheus.CounterValue, float64(v), pool.Name, k)
+	}
+}
+
+func processAggregateLastRequestCPU(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
+	var total float64
+	var count float64
+	for _, process := range pool.Processes {
+		print(process.LastRequestCPU)
+		print(" ... ")
+		total += process.LastRequestCPU
+		count++
+	}
+	ch <- prometheus.MustNewConstMetric(e.processAggregateLastRequestCPU, prometheus.CounterValue, total/count, pool.Name)
+}
+
+func processAggregateLastRequestMemory(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
+	var total int64
+	var count int64
+	for _, process := range pool.Processes {
+		total += process.LastRequestMemory
+		count++
+	}
+	ch <- prometheus.MustNewConstMetric(e.processAggregateLastRequestMemory, prometheus.CounterValue, float64(total/count), pool.Name)
+}
+
+func processAggregateRequestDuration(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
+	var total float64
+	var count float64
+	for _, process := range pool.Processes {
+		total += float64(process.RequestDuration)
+		count++
+	}
+	ch <- prometheus.MustNewConstMetric(e.processAggregateRequestDuration, prometheus.CounterValue, float64(total/count), pool.Name)
+}
+
+func processAggregateRequests(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
+	var total float64
+	var count float64
+	for _, process := range pool.Processes {
+		total += float64(process.Requests)
+		count++
+	}
+	ch <- prometheus.MustNewConstMetric(e.processAggregateRequests, prometheus.CounterValue, float64(total/count), pool.Name)
+	ch <- prometheus.MustNewConstMetric(e.processTotalRequests, prometheus.CounterValue, float64(total), pool.Name)
 }
 
 // Describe exposes the metric description to Prometheus
