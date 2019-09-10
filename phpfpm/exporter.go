@@ -272,9 +272,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-/**
-	Aggregates the totals of each process state
- */
+// Aggregates the totals of each process state
 func aggregateProcessState(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
 	var m = make(map[string]int)
 	for _, process := range pool.Processes {
