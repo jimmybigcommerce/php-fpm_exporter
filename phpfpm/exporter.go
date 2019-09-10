@@ -283,12 +283,11 @@ func aggregateProcessState(pool Pool, ch chan<- prometheus.Metric, e *Exporter) 
 	}
 }
 
+// Add
 func processAggregateLastRequestCPU(pool Pool, ch chan<- prometheus.Metric, e *Exporter) {
 	var total float64
 	var count float64
 	for _, process := range pool.Processes {
-		print(process.LastRequestCPU)
-		print(" ... ")
 		total += process.LastRequestCPU
 		count++
 	}
